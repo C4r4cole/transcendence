@@ -21,8 +21,43 @@ const start = async () => {
 			console.log("Clients connected:", clients.size);
 			socket.on("message", (data) => {
 				try{
-					const message: InputMessage = JSON.parse(data.toString());
+					const message: unknown = JSON.parse(data.toString());
 	
+					if (message === null || typeof message !== "object")
+					{
+						console.log("Invalid message");
+						return ;
+					}
+
+					if (!("type" in message))
+					{
+						console.log("Invalid message");
+						return ;
+					}
+
+					if (!("key" in message))
+					{
+						console.log("Invalid message");
+						return ;
+					}
+
+					if (message.type !== "input")
+					{
+						console.log("Invalid message");
+						return ;
+					}
+
+					if (message.key !== "left" && message.key !== "right")
+					{
+						console.log("Invalid message");
+						return ;
+					}
+
+					const inputMessage: InputMessage = {
+						type: message.type,
+						key: message.key
+					};
+					
 					console.log(message.type);
 					console.log(message.key);
 				}
