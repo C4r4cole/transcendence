@@ -12,6 +12,25 @@ interface InputMessage {
 	key: Key;
 }
 
+function isInputMessage(value: unknown): value is InputMessage {
+	if (value === null || typeof value !== "object")
+		return (false);
+
+	if (!("type" in value))
+		return (false);
+
+	if (!("key" in value))
+		return (false);
+
+	if (value.type !== "input")
+		return (false);
+
+	if (value.key !== "left" && value.key !== "right")
+		return (false);
+
+	return (true);
+}
+
 const start = async () => {
 	try {
 		await app.register(fastifyWebsocket);
@@ -22,42 +41,12 @@ const start = async () => {
 			socket.on("message", (data) => {
 				try{
 					const message: unknown = JSON.parse(data.toString());
-	
-					if (message === null || typeof message !== "object")
+
+					if (!isInputMessage(message))
 					{
 						console.log("Invalid message");
 						return ;
 					}
-
-					if (!("type" in message))
-					{
-						console.log("Invalid message");
-						return ;
-					}
-
-					if (!("key" in message))
-					{
-						console.log("Invalid message");
-						return ;
-					}
-
-					if (message.type !== "input")
-					{
-						console.log("Invalid message");
-						return ;
-					}
-
-					if (message.key !== "left" && message.key !== "right")
-					{
-						console.log("Invalid message");
-						return ;
-					}
-
-					const inputMessage: InputMessage = {
-						type: message.type,
-						key: message.key
-					};
-					
 					console.log(message.type);
 					console.log(message.key);
 				}
