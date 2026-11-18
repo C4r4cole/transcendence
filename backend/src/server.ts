@@ -1,9 +1,9 @@
-import fastify from "fastify";
+import Fastify from "fastify";
 import fastifyWebsocket from "@fastify/websocket";
-import type { WebSocket } from "ws";
-import type { Key, GameStatus } from "./shared/types.js";
+import type { WebSocket, RawData } from "ws";
+import type { Key, GameStatus, Game, Player } from "./shared/types.js";
 
-const app = fastify();
+const app = Fastify();
 
 const clients = new Set<WebSocket>();
 
@@ -31,34 +31,38 @@ function isInputMessage(value: unknown): value is InputMessage {
 	return (true);
 }
 
+const onMessage = (data: RawData) => {
+		try{
+			const message: unknown = JSON.parse(data.toString());
+
+			if (!isInputMessage(message))
+			{
+				console.log("Invalid message");
+				return ;
+			}
+			console.log(message.type);
+			console.log(message.key);
+		}
+		catch (err)
+		{
+			console.log("Invalid JSON");
+		}
+	}
+
+const onConnection = (socket: WebSocket) => {
+	clients.add(socket);
+	console.log("Clients connected:", clients.size);
+	socket.on("message", onMessage);
+	socket.on("close", () => {
+		clients.delete(socket);
+	})
+}
+
 const start = async () => {
 	try {
 		await app.register(fastifyWebsocket);
 
-		app.get("/ws", { websocket: true }, (socket, request) => {
-			clients.add(socket);
-			console.log("Clients connected:", clients.size);
-			socket.on("message", (data) => {
-				try{
-					const message: unknown = JSON.parse(data.toString());
-
-					if (!isInputMessage(message))
-					{
-						console.log("Invalid message");
-						return ;
-					}
-					console.log(message.type);
-					console.log(message.key);
-				}
-				catch (err)
-				{
-					console.log("Invalid JSON");
-				}
-			})
-			socket.on("close", () => {
-				clients.delete(socket);
-			})
-		})
+		app.get("/ws", { websocket: true }, onConnection)
 		
 		await app.listen({port: 3000});
 		console.log("server started");
