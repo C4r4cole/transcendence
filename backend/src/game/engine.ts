@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Game, Player, Key, GameErrorCode } from "../../shared/types.js";
+import type { Game, Player, Key, GameErrorCode } from "../shared/types.js";
 import {
 	FINISH_DISTANCE,
 	COUNTDOWN_MS,
