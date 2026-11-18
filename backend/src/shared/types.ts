@@ -6,6 +6,12 @@ export type GameStatus =
 export type PlayerStatus =
     "active" | "finished" | "abandoned" | "dnf";
 
+export type GameErrorCode =
+	| "GAME_NOT_WAITING"
+	| "GAME_FULL"
+	| "NOT_ENOUGH_PLAYERS"
+	| "UNKNOWN_PLAYER";
+
 export interface Player {
     id: string;
     position: number;
