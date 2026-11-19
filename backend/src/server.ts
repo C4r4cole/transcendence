@@ -1,14 +1,16 @@
 import Fastify from "fastify";
 import fastifyWebsocket from "@fastify/websocket";
 import type { WebSocket, RawData } from "ws";
-import type { Key, GameStatus, Game, Player } from "./shared/types.js";
+import type { Key, GameStatus, Game, Player, GameErrorCode } from "./shared/types.js";
 import * as engine from "./game/engine.js"
+
+const TICK_MS = 50;
 
 const app = Fastify();
 
 await app.register(fastifyWebsocket);
 
-const clients = new Set<WebSocket>();
+const clients = new Map<string, WebSocket>();
 
 const games = new Map<string, Game>();
 let game = engine.createGame();
@@ -17,56 +19,87 @@ games.set(game.id, game);
 
 interface InputMessage {
 	type: "input";
+	playerId: string;
 	key: Key;
 }
 
 function isInputMessage(value: unknown): value is InputMessage {
 	if (value === null || typeof value !== "object")
-		return (false);
+		return false;
 
-	if (!("type" in value))
-		return (false);
-
-	if (!("key" in value))
-		return (false);
+	if (!("type" in value) || !("playerId" in value) || !("key" in value))
+		return false;
 
 	if (value.type !== "input")
-		return (false);
-
+		return false;
 	if (value.key !== "left" && value.key !== "right")
-		return (false);
+		return false;
+	if (typeof value.playerId !== "string")
+		return false;
 
-	return (true);
+	return true;
 }
 
-const onMessage = (data: RawData) => {
+function tryEngine(
+	gameId: string,
+	call: () => void,
+	onRefused: (code: GameErrorCode) => void,
+): void {
 	try {
-		const message: unknown = JSON.parse(data.toString());
-
-		if (!isInputMessage(message)) {
-			console.log("Invalid message");
+		call();
+	} catch (e) {
+		if (e instanceof engine.GameError) {
+			onRefused(e.code);
 			return;
 		}
-		console.log(message.type);
-		console.log(message.key);
-	}
-	catch (err) {
-		console.log("Invalid JSON");
+		console.error(`[game ${gameId}] engine bug:`, e);
+		// closeGame(gameId);
 	}
 }
 
 const onConnection = (socket: WebSocket) => {
-	clients.add(socket);
+	const playerId = String(clients.size);
+
+	clients.set(playerId, socket);
+
 	console.log("Clients connected:", clients.size);
 
-	engine.addPlayer(game, String(clients.size))
-	if (game.players.length >= 2) {
-		engine.startGame()
-	}
+	tryEngine(
+		game.id,
+		() => {
+			engine.addPlayer(game, playerId);
+			if (game.players.length >= 2) {
+				engine.startGame(game, performance.now());
+			}
+		},
+		(code) => socket.send(JSON.stringify({ type: "error", code })),
+	);
 
-	socket.on("message", onMessage);
+	socket.on("message", (raw) => {
+		const message: unknown = JSON.parse(raw.toString());
+
+		if (!isInputMessage(message)) {
+			console.error("ERROR: Invalid message");
+			return;
+		}
+
+		tryEngine(
+			game.id,
+			() => {
+				engine.handleInput(game, message.playerId,
+					message.key, performance.now()
+				);
+				console.log("position" + game.players[+playerId].position);
+			},
+			(code) => socket.send(JSON.stringify({ type: "error", code })),
+		);
+
+		console.log(message.type);
+		console.log(message.playerId);
+		console.log(message.key);
+	});
 	socket.on("close", () => {
-		clients.delete(socket);
+		clients.delete(playerId);
 	})
 }
 
@@ -84,3 +117,10 @@ const start = async () => {
 };
 
 start();
+
+setInterval(() => {
+	const now = performance.now();
+	for (const game of games.values()) {
+		tryEngine(game.id, () => engine.updateGame(game, now), () => { })
+	}
+}, TICK_MS);
